@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>주말 빈자리</title>
+<meta name="theme-color" content="#f6f3ee" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="주말 빈자리">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root {
+    --bg: #f6f3ee; --card: #ffffff; --ink: #1d1f23; --sub: #6b6f76; --line: #e7e2da;
+    --ok: #1f8a4c; --ok-bg: #e3f4ea; --low: #9a6400; --low-bg: #fdf0d2;
+    --no: #9aa0a8; --no-bg: #f0eeea; --accent: #2d5bd7; --warn-bg: #fff4e5; --warn: #8a4b00;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16181c; --card: #1f2227; --ink: #eceef1; --sub: #9aa0a8; --line: #2e3238;
+      --ok: #5fd08f; --ok-bg: #173a27; --low: #f3c054; --low-bg: #3d3014;
+      --no: #6c727a; --no-bg: #262a30; --accent: #8fb0ff; --warn-bg: #3a2a14; --warn: #f3c38a;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+    padding: calc(env(safe-area-inset-top, 0px) + 18px) 16px calc(env(safe-area-inset-bottom, 0px) + 32px);
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  .updated { color: var(--sub); font-size: 13px; text-align: right; }
+  .updated button {
+    border: 0; background: none; color: var(--accent); font: inherit; padding: 4px 0 0; cursor: pointer;
+  }
+  .controls {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 14px;
+  }
+  .controls label { color: var(--sub); font-size: 14px; }
+  .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper button {
+    width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
+    color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer;
+  }
+  .stepper output { min-width: 44px; text-align: center; font-weight: 700; font-size: 16px; }
+  .toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--sub); cursor: pointer; }
+  .toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  .museum { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 14px 6px; margin-bottom: 14px; }
+  .museum h2 { font-size: 17px; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .museum h2 a { color: var(--accent); font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .notice { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-top: 10px; }
+
+  .day { padding: 12px 0; border-top: 1px solid var(--line); }
+  .museum h2 + .day, .museum .notice + .day { border-top: 0; }
+  .day-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+  .day-date { font-weight: 700; font-size: 16px; }
+  .day-date .sat { color: #2d6fd7; } .day-date .sun { color: #d6453d; }
+  @media (prefers-color-scheme: dark) { .day-date .sat { color: #8fb0ff; } .day-date .sun { color: #ff8a80; } }
+  .day-sum { font-size: 13px; color: var(--sub); }
+  .day-sum.has { color: var(--ok); font-weight: 600; }
+  .chips { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 5px; }
+  .chip {
+    display: block; text-decoration: none; border-radius: 11px; padding: 7px 4px 8px; text-align: center;
+    background: var(--no-bg); color: var(--no); min-height: 54px; min-width: 0;
+  }
+  .chip .t { font-size: 12px; display: block; opacity: .9; font-variant-numeric: tabular-nums; }
+  .chip .n { font-size: 18px; font-weight: 750; display: block; letter-spacing: -0.02em; }
+  .chip .n small { font-size: 12px; font-weight: 500; }
+  .chip.ok { background: var(--ok-bg); color: var(--ok); }
+  .chip.low { background: var(--low-bg); color: var(--low); }
+  .chip.no .n { font-size: 14px; font-weight: 600; padding-top: 3px; }
+  .chip.no.some .n { font-size: 16px; }
+  .muted { color: var(--sub); font-size: 14px; padding: 4px 0 10px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--sub); font-size: 12px; margin: 4px 2px 0; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .hidden-note { color: var(--sub); font-size: 13px; padding: 2px 0 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>주말 빈자리</h1>
+    <div class="updated"><span id="updated">불러오는 중…</span><br><button id="reload" type="button">새로고침</button></div>
+  </header>
+
+  <div class="controls">
+    <div class="stepper" role="group" aria-label="필요한 인원">
+      <label for="people" style="margin-right:6px">우리 가족</label>
+      <button type="button" id="minus" aria-label="인원 줄이기">−</button>
+      <output id="people" aria-live="polite">4명</output>
+      <button type="button" id="plus" aria-label="인원 늘리기">+</button>
+    </div>
+    <label class="toggle"><input type="checkbox" id="onlyAvail"> 갈 수 있는 날만</label>
+  </div>
+
+  <main id="list"></main>
+
+  <div class="legend">
+    <span><i style="background:var(--ok)"></i>여유</span>
+    <span><i style="background:var(--low)"></i>10명 이하</span>
+    <span><i style="background:var(--no)"></i>마감·인원 부족</span>
+    <span>회차를 누르면 예약 페이지로 이동해요</span>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let people = store.get("people", 4);
+let onlyAvail = store.get("onlyAvail", false);
+let data = null;
+
+function ago(iso) {
+  if (!iso) return "";
+  const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (m < 1) return "방금 전";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}시간 전`;
+  return `${Math.floor(h / 24)}일 전`;
+}
+
+function chipClass(s) {
+  if (s.status !== "open" || s.remaining < people) return "no";
+  return s.remaining <= 10 ? "low" : "ok";
+}
+
+function chipLabel(s) {
+  if (s.status === "ended") return "종료";
+  if (s.status !== "open" || s.remaining === 0) return "마감";
+  return `${s.remaining}<small>석</small>`;
+}
+
+function dateLabel(d) {
+  const [, mo, da] = d.date.split("-").map(Number);
+  const cls = d.weekday === "토" ? "sat" : (d.weekday === "일" || d.holiday) ? "sun" : "";
+  return `${mo}/${da} <span class="${cls}">${d.weekday}${d.holiday ? "·공휴일" : ""}</span>`;
+}
+
+function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function render() {
+  $("people").textContent = `${people}명`;
+  $("onlyAvail").checked = onlyAvail;
+  if (!data) return;
+  $("updated").textContent = `${ago(data.updatedAt)} 확인`;
+
+  $("list").innerHTML = data.museums.map(m => {
+    let hidden = 0;
+    const days = m.days.map(d => {
+      if (d.status === "notOpen") {
+        if (onlyAvail) { hidden++; return ""; }
+        return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum">아직 예약이 열리지 않았어요</span></div></div>`;
+      }
+      const usable = d.sessions.filter(s => chipClass(s) !== "no").length;
+      if (onlyAvail && !usable) { hidden++; return ""; }
+      const sum = d.status === "closed" ? "휴관"
+        : usable ? `${usable}개 회차 가능` : `${people}명 자리 없음`;
+      const chips = d.sessions.map(s =>
+        `<a class="chip ${chipClass(s)}${s.status === "open" && s.remaining > 0 ? " some" : ""}" title="${s.no}회 ${esc(s.time)}" href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">
+           <span class="t">${esc(s.time.split("~")[0])}</span>
+           <span class="n">${chipLabel(s)}</span></a>`).join("");
+      return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum ${usable ? "has" : ""}">${sum}</span></div><div class="chips" style="--n:${Math.max(d.sessions.length, 1)}">${chips}</div></div>`;
+    }).join("");
+
+    const notice = m.ok ? "" :
+      `<div class="notice">지금 이 박물관 정보를 가져오지 못했어요.${m.checkedAt ? ` 아래는 ${ago(m.checkedAt)} 정보예요.` : ""}</div>`;
+    const empty = !days.trim()
+      ? `<div class="muted">${hidden ? `${people}명이 갈 수 있는 주말 회차가 없어요.` : "예약 가능한 주말이 없어요."}</div>` : "";
+    return `<section class="museum"><h2>${esc(m.name)}<a href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">예약하기 ›</a></h2>${notice}${days}${empty}</section>`;
+  }).join("");
+}
+
+async function load() {
+  $("updated").textContent = "불러오는 중…";
+  try {
+    const r = await fetch(`data.json?t=${Date.now()}`, { cache: "no-store" });
+    data = await r.json();
+  } catch (e) {
+    if (!data) $("list").innerHTML = `<div class="museum"><div class="muted">정보를 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</div></div>`;
+  }
+  render();
+}
+
+$("minus").onclick = () => { people = Math.max(1, people - 1); store.set("people", people); render(); };
+$("plus").onclick = () => { people = Math.min(10, people + 1); store.set("people", people); render(); };
+$("onlyAvail").onchange = (e) => { onlyAvail = e.target.checked; store.set("onlyAvail", onlyAvail); render(); };
+$("reload").onclick = load;
+document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
+setInterval(() => { if (!document.hidden) load(); }, 5 * 60 * 1000);
+setInterval(() => { if (data) $("updated").textContent = `${ago(data.updatedAt)} 확인`; }, 30 * 1000);
+load();
+</script>
+</body>
+</html>
