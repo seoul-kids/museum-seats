@@ -45,7 +45,9 @@
     background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; margin-bottom: 14px;
   }
   .controls label { color: var(--sub); font-size: 14px; }
+  .steppers { display: flex; flex-direction: column; gap: 6px; }
   .stepper { display: flex; align-items: center; gap: 4px; }
+  .stepper .lbl { width: 66px; color: var(--sub); font-size: 14px; }
   .stepper button {
     width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg);
     color: var(--ink); font-size: 20px; line-height: 1; cursor: pointer;
@@ -105,11 +107,19 @@
   <section class="opens" id="opens" hidden><h3>예약 열리는 시간</h3><div id="opensList"></div></section>
 
   <div class="controls">
-    <div class="stepper" role="group" aria-label="필요한 인원">
-      <label for="people" style="margin-right:6px">우리 가족</label>
-      <button type="button" id="minus" aria-label="인원 줄이기">−</button>
-      <output id="people" aria-live="polite">4명</output>
-      <button type="button" id="plus" aria-label="인원 늘리기">+</button>
+    <div class="steppers">
+      <div class="stepper" role="group" aria-label="가족 전체 인원">
+        <label class="lbl">우리 가족</label>
+        <button type="button" id="minus" aria-label="가족 인원 줄이기">−</button>
+        <output id="people" aria-live="polite">4명</output>
+        <button type="button" id="plus" aria-label="가족 인원 늘리기">+</button>
+      </div>
+      <div class="stepper" role="group" aria-label="아이 수" id="kidsRow" hidden>
+        <label class="lbl">그중 아이</label>
+        <button type="button" id="kminus" aria-label="아이 수 줄이기">−</button>
+        <output id="kids" aria-live="polite">1명</output>
+        <button type="button" id="kplus" aria-label="아이 수 늘리기">+</button>
+      </div>
     </div>
     <label class="toggle"><input type="checkbox" id="onlyAvail"> 갈 수 있는 날만</label>
   </div>
@@ -131,6 +141,7 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 let people = store.get("people", 4);
+let kids = store.get("kids", 1);
 let onlyAvail = store.get("onlyAvail", false);
 let data = null;
 
@@ -144,9 +155,14 @@ function ago(iso) {
   return `${Math.floor(h / 24)}일 전`;
 }
 
-function chipClass(s) {
-  if (s.status !== "open" || s.remaining < people) return "no";
-  return s.remaining <= Math.max(10, (s.capacity || 0) * 0.1) ? "low" : "ok";
+// Seats a museum needs: children-only programs count kids, everything else the whole family.
+const needFor = (m) => m.partyType === "kids" ? kids : people;
+const needLabel = (m) => m.partyType === "kids" ? `아이 ${kids}명` : `${people}명`;
+
+function chipClass(s, need = people) {
+  if (s.status !== "open" || s.remaining < need) return "no";
+  // "Few left" = 20% of a session's capacity (10 seats when capacity is unknown).
+  return s.remaining <= (s.capacity ? Math.max(2, s.capacity * 0.2) : 10) ? "low" : "ok";
 }
 
 function chipLabel(s) {
@@ -213,37 +229,43 @@ function renderOpens() {
   $("opensList").innerHTML = rows.join("");
 }
 
+// Up to 5 sessions fit one row on a phone; more wrap into two even rows.
+const cols = (n) => n <= 5 ? Math.max(n, 1) : Math.ceil(n / 2);
+
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 function render() {
   $("people").textContent = `${people}명`;
+  $("kids").textContent = `${kids}명`;
   $("onlyAvail").checked = onlyAvail;
   if (!data) return;
   $("updated").textContent = `${ago(data.updatedAt)} 확인`;
   renderOpens();
 
+  $("kidsRow").hidden = !data.museums.some(m => m.partyType === "kids");
   $("list").innerHTML = data.museums.map(m => {
     let hidden = 0;
+    const need = needFor(m);
     const days = m.days.map(d => {
       if (d.status === "notOpen") {
         if (onlyAvail) { hidden++; return ""; }
         return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum">${d.opensAt ? `${openLabel(d)} 예약 오픈` : "아직 예약이 열리지 않았어요"}</span></div></div>`;
       }
-      const usable = d.sessions.filter(s => chipClass(s) !== "no").length;
+      const usable = d.sessions.filter(s => chipClass(s, need) !== "no").length;
       if (onlyAvail && !usable) { hidden++; return ""; }
       const sum = d.status === "closed" ? "휴관"
-        : usable ? `${usable}개 회차 가능` : `${people}명 자리 없음`;
+        : usable ? `${usable}개 회차 가능` : `${needLabel(m)} 자리 없음`;
       const chips = d.sessions.map(s =>
-        `<a class="chip ${chipClass(s)}${s.status === "open" && s.remaining > 0 ? " some" : ""}" title="${s.no}회 ${esc(s.time)}" href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">
+        `<a class="chip ${chipClass(s, need)}${s.status === "open" && s.remaining > 0 ? " some" : ""}" title="${s.no}회 ${esc(s.time)}" href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">
            <span class="t">${esc(s.time.split("~")[0])}</span>
            <span class="n">${chipLabel(s)}</span></a>`).join("");
-      return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum ${usable ? "has" : ""}">${sum}</span></div><div class="chips" style="--n:${Math.max(d.sessions.length, 1)}">${chips}</div></div>`;
+      return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum ${usable ? "has" : ""}">${sum}</span></div><div class="chips" style="--n:${cols(d.sessions.length)}">${chips}</div></div>`;
     }).join("");
 
     const notice = m.ok ? "" :
       `<div class="notice">지금 이 박물관 정보를 가져오지 못했어요.${m.checkedAt ? ` 아래는 ${ago(m.checkedAt)} 정보예요.` : ""}</div>`;
     const empty = !days.trim()
-      ? `<div class="muted">${hidden ? `${people}명이 갈 수 있는 주말 회차가 없어요.` : "예약 가능한 주말이 없어요."}</div>` : "";
+      ? `<div class="muted">${hidden ? `${needLabel(m)}이 갈 수 있는 주말 회차가 없어요.` : "예약 가능한 주말이 없어요."}</div>` : "";
     return `<section class="museum"><h2>${esc(m.name)}<a href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">예약하기 ›</a></h2>${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}${notice}${days}${empty}</section>`;
   }).join("");
 }
@@ -259,7 +281,9 @@ async function load() {
   render();
 }
 
-$("minus").onclick = () => { people = Math.max(1, people - 1); store.set("people", people); render(); };
+$("kminus").onclick = () => { kids = Math.max(1, kids - 1); store.set("kids", kids); render(); };
+$("kplus").onclick = () => { kids = Math.min(people, kids + 1); store.set("kids", kids); render(); };
+$("minus").onclick = () => { people = Math.max(1, people - 1); kids = Math.min(kids, people); store.set("people", people); store.set("kids", kids); render(); };
 $("plus").onclick = () => { people = Math.min(10, people + 1); store.set("people", people); render(); };
 $("onlyAvail").onchange = (e) => { onlyAvail = e.target.checked; store.set("onlyAvail", onlyAvail); render(); };
 $("reload").onclick = load;
