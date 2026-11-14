@@ -93,6 +93,13 @@
   .chip.no .n { font-size: 14px; font-weight: 600; padding-top: 3px; }
   .chip.no.some .n { font-size: 16px; }
   .muted { color: var(--sub); font-size: 14px; padding: 4px 0 10px; }
+  .region { padding: 12px 0 6px; border-top: 1px solid var(--line); }
+  .museum h2 + .region { border-top: 0; }
+  .region h3 { margin: 0 0 6px; font-size: 15px; }
+  .region h3 span { color: var(--sub); font-weight: 500; font-size: 13px; margin-left: 4px; }
+  .places { list-style: none; margin: 0; padding: 0; }
+  .places li { padding: 9px 0; font-size: 15px; }
+  .places li + li { border-top: 1px dashed var(--line); }
   .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--sub); font-size: 12px; margin: 4px 2px 0; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .hidden-note { color: var(--sub); font-size: 13px; padding: 2px 0 10px; }
@@ -119,7 +126,7 @@
     <div class="updated"><span id="updated">불러오는 중…</span><br><button id="reload" type="button">새로고침</button></div>
   </header>
 
-  <div class="controls">
+  <div class="controls" id="controls">
     <div class="steppers">
       <div class="stepper" role="group" aria-label="가족 전체 인원">
         <label class="lbl">우리 가족</label>
@@ -143,7 +150,7 @@
 
   <main id="list" role="tabpanel"></main>
 
-  <div class="legend">
+  <div class="legend" id="legend">
     <span><i style="background:var(--ok)"></i>여유</span>
     <span><i style="background:var(--low)"></i>얼마 안 남음</span>
     <span><i style="background:var(--no)"></i>마감·인원 부족</span>
@@ -252,15 +259,47 @@ const cols = (n) => n <= 5 ? Math.max(n, 1) : Math.ceil(n / 2);
 
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+// "기타" tab: places worth visiting, names only, grouped by region (no seat lookup).
+const ETC_ID = "etc";
+const ETC_PLACES = [
+  ["서울", [
+    "국립어린이과학관",
+    "서대문자연사박물관",
+    "서울공예박물관 어린이박물관",
+    "서울상상나라",
+    "서울시립과학관",
+    "서울아리수나라",
+    "서울역사박물관 어린이박물관",
+    "전쟁기념관 어린이박물관",
+  ]],
+  ["인천", ["국립생물자원관", "인천어린이과학관"]],
+  ["경기", ["고양어린이박물관"]],
+];
+
+function renderEtc() {
+  const groups = ETC_PLACES.map(([region, names]) =>
+    `<div class="region"><h3>${esc(region)}<span>${names.length}곳</span></h3>
+      <ul class="places">${names.map(n => `<li>${esc(n)}</li>`).join("")}</ul></div>`).join("");
+  return `<section class="museum"><h2>갈 만한 곳</h2>${groups}</section>`;
+}
+
 function render() {
   $("people").textContent = `${people}명`;
   $("kids").textContent = `${kids}명`;
   $("onlyAvail").checked = onlyAvail;
   if (!data) return;
   $("updated").textContent = `${ago(data.updatedAt)} 확인`;
-  if (!data.museums.some(m => m.id === tab)) tab = data.museums[0]?.id;
+  if (tab !== ETC_ID && !data.museums.some(m => m.id === tab)) tab = data.museums[0]?.id;
   renderTabs();
   renderOpens();
+  const isEtc = tab === ETC_ID;
+  $("controls").hidden = isEtc;
+  $("legend").hidden = isEtc;
+  if (isEtc) {
+    $("list").setAttribute("aria-labelledby", `tab-${ETC_ID}`);
+    $("list").innerHTML = renderEtc();
+    return;
+  }
 
   const cur = data.museums.find(m => m.id === tab);
   // The "그중 아이" stepper only matters for children-only programs.
@@ -295,7 +334,7 @@ function render() {
 
 function renderTabs() {
   const el = $("tabs");
-  el.innerHTML = data.museums.map(m => {
+  el.innerHTML = [...data.museums, { id: ETC_ID, tab: "기타" }].map(m => {
     const sel = m.id === tab;
     return `<button type="button" role="tab" class="tab" id="tab-${esc(m.id)}" data-id="${esc(m.id)}"
       aria-selected="${sel}" aria-controls="list" tabindex="${sel ? 0 : -1}">${esc(m.tab || m.short || m.name)}</button>`;
@@ -319,7 +358,7 @@ $("tabs").addEventListener("click", (e) => {
   if (b) selectTab(b.dataset.id);
 });
 $("tabs").addEventListener("keydown", (e) => {
-  const ids = data ? data.museums.map(m => m.id) : [];
+  const ids = data ? [...data.museums.map(m => m.id), ETC_ID] : [];
   const i = ids.indexOf(tab);
   const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: ids.length - 1 }[e.key];
   if (next === undefined || !ids.length) return;
