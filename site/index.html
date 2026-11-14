@@ -60,7 +60,8 @@
   .notice { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 8px 10px; font-size: 13px; margin-top: 10px; }
 
   .day { padding: 12px 0; border-top: 1px solid var(--line); }
-  .museum h2 + .day, .museum .notice + .day { border-top: 0; }
+  .museum h2 + .day, .museum .notice + .day, .museum .note + .day { border-top: 0; }
+  .note { color: var(--sub); font-size: 12px; margin-top: 2px; }
   .day-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
   .day-date { font-weight: 700; font-size: 16px; }
   .day-date .sat { color: #2d6fd7; } .day-date .sun { color: #d6453d; }
@@ -106,7 +107,7 @@
 
   <div class="legend">
     <span><i style="background:var(--ok)"></i>여유</span>
-    <span><i style="background:var(--low)"></i>10명 이하</span>
+    <span><i style="background:var(--low)"></i>얼마 안 남음</span>
     <span><i style="background:var(--no)"></i>마감·인원 부족</span>
     <span>회차를 누르면 예약 페이지로 이동해요</span>
   </div>
@@ -134,7 +135,7 @@ function ago(iso) {
 
 function chipClass(s) {
   if (s.status !== "open" || s.remaining < people) return "no";
-  return s.remaining <= 10 ? "low" : "ok";
+  return s.remaining <= Math.max(10, (s.capacity || 0) * 0.1) ? "low" : "ok";
 }
 
 function chipLabel(s) {
@@ -179,7 +180,7 @@ function render() {
       `<div class="notice">지금 이 박물관 정보를 가져오지 못했어요.${m.checkedAt ? ` 아래는 ${ago(m.checkedAt)} 정보예요.` : ""}</div>`;
     const empty = !days.trim()
       ? `<div class="muted">${hidden ? `${people}명이 갈 수 있는 주말 회차가 없어요.` : "예약 가능한 주말이 없어요."}</div>` : "";
-    return `<section class="museum"><h2>${esc(m.name)}<a href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">예약하기 ›</a></h2>${notice}${days}${empty}</section>`;
+    return `<section class="museum"><h2>${esc(m.name)}<a href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">예약하기 ›</a></h2>${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}${notice}${days}${empty}</section>`;
   }).join("");
 }
 
