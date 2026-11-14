@@ -22,6 +22,7 @@ INFO = {
     "id": "nfm-kids",
     "name": "국립민속박물관 어린이박물관",
     "short": "민속 어린이박물관",
+    "tab": "민속",
     "bookingUrl": CALENDAR_URL,
     "note": "개인 2~9명 예약",
     # 홈페이지 안내: "매일 오전 9시에 2주 내의 예약이 가능" -> date D opens at D-14 09:00

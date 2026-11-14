@@ -26,6 +26,7 @@ INFO = {
     "id": "swr",
     "name": "서울물재생체험관",
     "short": "물재생체험관",
+    "tab": "물재생",
     "bookingUrl": BASE + "/sale/siteDetail/SWR?indivimall=swr",
     "note": "개인 1~9명 예약 (보호자 포함) · 월요일 휴관",
     "openRule": {"text": "매주 금요일 오후 2시에 다음 1주 치 오픈 (항상 4주 앞까지)"},

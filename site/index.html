@@ -27,6 +27,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
@@ -95,6 +96,25 @@
   .legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--sub); font-size: 12px; margin: 4px 2px 0; }
   .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .hidden-note { color: var(--sub); font-size: 13px; padding: 2px 0 10px; }
+
+  .tabs-bar {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+    background: var(--bg); margin: 0 -16px 12px; padding: 8px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tab {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    border-radius: 999px; padding: 7px 11px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .tab .badge {
+    min-width: 20px; padding: 1px 6px; border-radius: 999px; font-size: 12px; font-weight: 700; text-align: center;
+    background: var(--no-bg); color: var(--no);
+  }
+  .tab .badge.has { background: var(--ok-bg); color: var(--ok); }
+  .tab .badge.warn { background: var(--warn-bg); color: var(--warn); }
 </style>
 </head>
 <body>
@@ -103,8 +123,6 @@
     <h1>주말 빈자리</h1>
     <div class="updated"><span id="updated">불러오는 중…</span><br><button id="reload" type="button">새로고침</button></div>
   </header>
-
-  <section class="opens" id="opens" hidden><h3>예약 열리는 시간</h3><div id="opensList"></div></section>
 
   <div class="controls">
     <div class="steppers">
@@ -124,7 +142,11 @@
     <label class="toggle"><input type="checkbox" id="onlyAvail"> 갈 수 있는 날만</label>
   </div>
 
-  <main id="list"></main>
+  <nav class="tabs-bar" aria-label="박물관 선택"><div class="tabs" id="tabs" role="tablist"></div></nav>
+
+  <section class="opens" id="opens" hidden><h3>예약 열리는 시간</h3><div id="opensList"></div></section>
+
+  <main id="list" role="tabpanel"></main>
 
   <div class="legend">
     <span><i style="background:var(--ok)"></i>여유</span>
@@ -144,6 +166,7 @@ let people = store.get("people", 4);
 let kids = store.get("kids", 1);
 let onlyAvail = store.get("onlyAvail", false);
 let data = null;
+let tab = (location.hash || "").slice(1) || store.get("tab", null);
 
 function ago(iso) {
   if (!iso) return "";
@@ -218,12 +241,12 @@ function shortDate(d) {
   return `${mo}/${da}(${d.weekday})`;
 }
 function renderOpens() {
-  const rows = data.museums.filter(m => m.openRule).map(m => {
+  const rows = data.museums.filter(m => m.id === tab && m.openRule).map(m => {
     const next = m.days.find(d => d.status === "notOpen" && d.opensAt && new Date(d.opensAt) > Date.now());
     const nextHtml = next
       ? `<div class="next">${shortDate(next)}${next.holiday ? " 공휴일" : ""} 예약 → <b>${openLabel(next)}</b> 오픈 <span class="rule">(${untilText(next.opensAt)})</span></div>`
       : "";
-    return `<div class="open-row"><div class="who">${esc(m.short || m.name)}</div><div class="rule">${esc(m.openRule.text)}</div>${nextHtml}</div>`;
+    return `<div class="open-row"><div class="rule">${esc(m.openRule.text)}</div>${nextHtml}</div>`;
   });
   $("opens").hidden = !rows.length;
   $("opensList").innerHTML = rows.join("");
@@ -240,10 +263,15 @@ function render() {
   $("onlyAvail").checked = onlyAvail;
   if (!data) return;
   $("updated").textContent = `${ago(data.updatedAt)} 확인`;
+  if (!data.museums.some(m => m.id === tab)) tab = data.museums[0]?.id;
+  renderTabs();
   renderOpens();
 
-  $("kidsRow").hidden = !data.museums.some(m => m.partyType === "kids");
-  $("list").innerHTML = data.museums.map(m => {
+  const cur = data.museums.find(m => m.id === tab);
+  // The "그중 아이" stepper only matters for children-only programs.
+  $("kidsRow").hidden = !(cur && cur.partyType === "kids");
+  $("list").setAttribute("aria-labelledby", `tab-${tab}`);
+  $("list").innerHTML = data.museums.filter(m => m.id === tab).map(m => {
     let hidden = 0;
     const need = needFor(m);
     const days = m.days.map(d => {
@@ -269,6 +297,50 @@ function render() {
     return `<section class="museum"><h2>${esc(m.name)}<a href="${esc(m.bookingUrl)}" target="_blank" rel="noopener">예약하기 ›</a></h2>${m.note ? `<div class="note">${esc(m.note)}</div>` : ""}${notice}${days}${empty}</section>`;
   }).join("");
 }
+
+// Sessions the family can actually book in a museum (drives the tab badge).
+function usableCount(m) {
+  const need = needFor(m);
+  return m.days.reduce((n, d) => n + d.sessions.filter(s => chipClass(s, need) !== "no").length, 0);
+}
+
+function renderTabs() {
+  const el = $("tabs");
+  el.innerHTML = data.museums.map(m => {
+    const n = usableCount(m);
+    const sel = m.id === tab;
+    const badge = !m.ok ? `<span class="badge warn" aria-label="정보 오류">!</span>`
+      : `<span class="badge ${n ? "has" : ""}" aria-label="갈 수 있는 회차 ${n}개">${n}</span>`;
+    return `<button type="button" role="tab" class="tab" id="tab-${esc(m.id)}" data-id="${esc(m.id)}"
+      aria-selected="${sel}" aria-controls="list" tabindex="${sel ? 0 : -1}">${esc(m.tab || m.short || m.name)}${badge}</button>`;
+  }).join("");
+}
+
+function selectTab(id, focus) {
+  if (!id || id === tab) return;
+  tab = id;
+  store.set("tab", tab);
+  try { history.replaceState(null, "", `#${id}`); } catch {}
+  render();
+  // Bring the newly selected museum to the top of the screen, just under the tab bar.
+  const bar = document.querySelector(".tabs-bar");
+  if (window.scrollY > bar.offsetTop) window.scrollTo({ top: bar.offsetTop });
+  if (focus) document.getElementById(`tab-${id}`)?.focus();
+}
+
+$("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest(".tab");
+  if (b) selectTab(b.dataset.id);
+});
+$("tabs").addEventListener("keydown", (e) => {
+  const ids = data ? data.museums.map(m => m.id) : [];
+  const i = ids.indexOf(tab);
+  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: ids.length - 1 }[e.key];
+  if (next === undefined || !ids.length) return;
+  e.preventDefault();
+  selectTab(ids[(next + ids.length) % ids.length], true);
+});
+window.addEventListener("hashchange", () => selectTab(location.hash.slice(1)));
 
 async function load() {
   $("updated").textContent = "불러오는 중…";

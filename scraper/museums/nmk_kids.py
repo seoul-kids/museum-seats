@@ -20,6 +20,7 @@ INFO = {
     "id": "nmk-kids",
     "name": "국립중앙박물관 어린이박물관",
     "short": "국중박 어린이박물관",
+    "tab": "국립중앙",
     "bookingUrl": "https://www.museum.go.kr/MUSEUM/contents/M0104010000.do?schM=child&act=intro",
     "note": "개인 2~5명 예약",
     # 홈페이지 안내: "예약은 관람일 14일 전 00시부터 가능"

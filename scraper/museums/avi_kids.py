@@ -21,6 +21,7 @@ INFO = {
     "id": "avi-kids",
     "name": "국립항공박물관 어린이공항",
     "short": "항공박물관 어린이공항",
+    "tab": "항공",
     "bookingUrl": "https://aviation.moonhwain.net:451/rsvc/rsv_pm.html?lang=kr&b_id=aviation&stk_idx=5",
     "note": "48개월~미취학 아동만 체험 (보호자는 대기) · 유료 · 당일 10시부터 남은 자리는 현장 발권",
     "partyType": "kids",  # seats needed = number of children, not the whole family
