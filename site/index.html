@@ -106,15 +106,10 @@
   .tab {
     flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
     border: 1px solid var(--line); background: var(--card); color: var(--ink);
-    border-radius: 999px; padding: 7px 11px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .tab[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .tab .badge {
-    min-width: 20px; padding: 1px 6px; border-radius: 999px; font-size: 12px; font-weight: 700; text-align: center;
-    background: var(--no-bg); color: var(--no);
-  }
-  .tab .badge.has { background: var(--ok-bg); color: var(--ok); }
-  .tab .badge.warn { background: var(--warn-bg); color: var(--warn); }
+
 </style>
 </head>
 <body>
@@ -298,21 +293,12 @@ function render() {
   }).join("");
 }
 
-// Sessions the family can actually book in a museum (drives the tab badge).
-function usableCount(m) {
-  const need = needFor(m);
-  return m.days.reduce((n, d) => n + d.sessions.filter(s => chipClass(s, need) !== "no").length, 0);
-}
-
 function renderTabs() {
   const el = $("tabs");
   el.innerHTML = data.museums.map(m => {
-    const n = usableCount(m);
     const sel = m.id === tab;
-    const badge = !m.ok ? `<span class="badge warn" aria-label="정보 오류">!</span>`
-      : `<span class="badge ${n ? "has" : ""}" aria-label="갈 수 있는 회차 ${n}개">${n}</span>`;
     return `<button type="button" role="tab" class="tab" id="tab-${esc(m.id)}" data-id="${esc(m.id)}"
-      aria-selected="${sel}" aria-controls="list" tabindex="${sel ? 0 : -1}">${esc(m.tab || m.short || m.name)}${badge}</button>`;
+      aria-selected="${sel}" aria-controls="list" tabindex="${sel ? 0 : -1}">${esc(m.tab || m.short || m.name)}</button>`;
   }).join("");
 }
 
