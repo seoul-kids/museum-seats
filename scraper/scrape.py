@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from common import KST, day_entry, today_kst  # noqa: E402
+from common import KST, day_entry, load_holidays, today_kst, wanted  # noqa: E402
 from museums import ALL  # noqa: E402
 
 UPCOMING_WEEKS = 3  # also list weekends this far ahead that aren't bookable yet
@@ -36,17 +36,28 @@ def load_previous(src):
         return {}
 
 
-def add_not_open(days):
-    """Append upcoming weekends that the booking calendar hasn't opened yet."""
+def opens_at(d, rule):
+    """When booking for date d opens, as a KST ISO string (None if the rule is unknown)."""
+    if not rule:
+        return None
+    hh, mm = map(int, rule["time"].split(":"))
+    t = datetime(d.year, d.month, d.day, hh, mm, tzinfo=KST) - timedelta(days=rule["daysBefore"])
+    return t.isoformat(timespec="minutes")
+
+
+def add_not_open(days, holidays, rule):
+    """Append upcoming weekends/holidays that the booking calendar hasn't opened yet."""
     have = {d["date"] for d in days}
+    last_open = max(have) if have else ""
     start = today_kst()
     extra = []
     for i in range(UPCOMING_WEEKS * 7):
         d = start + timedelta(days=i)
-        if d.weekday() >= 5 and d.isoformat() not in have:
-            last_open = max(have) if have else ""
-            if d.isoformat() > last_open:
-                extra.append(day_entry(d, status="notOpen"))
+        keep, name = wanted(d, holidays)
+        if keep and d.isoformat() not in have and d.isoformat() > last_open:
+            e = day_entry(d, holiday=name, status="notOpen")
+            e["opensAt"] = opens_at(d, rule)
+            extra.append(e)
     return days + extra
 
 
@@ -57,19 +68,21 @@ def main():
     args = ap.parse_args()
 
     previous = load_previous(args.previous)
+    holidays = load_holidays()
+    print(f"[info] {len(holidays)} public holidays loaded")
     now = datetime.now(KST).isoformat(timespec="seconds")
     museums = []
     for mod in ALL:
         info = mod.INFO
         try:
-            m = mod.fetch()
-            m["days"] = add_not_open(m["days"])
+            m = mod.fetch(holidays)
+            m["days"] = add_not_open(m["days"], holidays, info.get("openRule"))
             m.update(ok=True, checkedAt=now)
             print(f"[ok] {info['name']}: {len(m['days'])} weekend days")
         except Exception as e:
             traceback.print_exc()
             prev = previous.get(info["id"])
-            m = {**info, **(prev or {}), "days": (prev or {}).get("days", [])}
+            m = {**(prev or {}), **info, "days": (prev or {}).get("days", [])}
             m.update(ok=False, error=f"{type(e).__name__}: {e}")
             m.setdefault("checkedAt", None)
             print(f"[fail] {info['name']}: {e}")

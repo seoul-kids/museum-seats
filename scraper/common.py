@@ -42,11 +42,44 @@ def is_weekend(d: date):
     return d.weekday() >= 5
 
 
-def day_entry(d: date, holiday=False, sessions=None, status="open"):
+def day_entry(d: date, holiday=None, sessions=None, status="open"):
+    """holiday: public holiday name (str), True if flagged without a name, or None."""
     return {
         "date": d.isoformat(),
         "weekday": WEEKDAY_KO[d.weekday()],
-        "holiday": holiday,
+        "holiday": holiday or None,
         "status": status,  # open | closed | notOpen
         "sessions": sessions or [],
     }
+
+
+# Google's public Korean holiday calendar (no API key). Events whose DESCRIPTION is
+# exactly "공휴일" are official days off, substitute holidays included; others are observances.
+HOLIDAY_ICS = ("https://calendar.google.com/calendar/ical/"
+               "ko.south_korea%23holiday%40group.v.calendar.google.com/public/basic.ics")
+
+
+def load_holidays():
+    """Return {date: name} of Korean public holidays, or {} if the calendar is unreachable."""
+    try:
+        ics = http(HOLIDAY_ICS)
+    except Exception as e:
+        print(f"[warn] holiday calendar unavailable: {e}")
+        return {}
+    out = {}
+    for ev in re.findall(r"BEGIN:VEVENT(.*?)END:VEVENT", ics.replace("\r\n ", ""), re.S):
+        d = re.search(r"DTSTART;VALUE=DATE:(\d{8})", ev)
+        name = re.search(r"SUMMARY:(.*)", ev)
+        desc = re.search(r"DESCRIPTION:(.*)", ev)
+        if d and name and desc and desc.group(1).strip() == "공휴일":
+            label = name.group(1).strip()
+            if label.startswith("쉬는 날 "):  # Google's wording for 대체공휴일
+                label = label[len("쉬는 날 "):] + " 대체휴일"
+            out[datetime.strptime(d.group(1), "%Y%m%d").date()] = label
+    return out
+
+
+def wanted(d: date, holidays):
+    """Weekend or public holiday -> (keep, holiday_name)."""
+    name = holidays.get(d)
+    return (d.weekday() >= 5 or name is not None), name

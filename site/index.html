@@ -54,6 +54,15 @@
   .toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--sub); cursor: pointer; }
   .toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
 
+  .opens { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+  .opens h3 { margin: 0 0 6px; font-size: 14px; color: var(--sub); font-weight: 600; }
+  .open-row { padding: 6px 0; }
+  .open-row + .open-row { border-top: 1px solid var(--line); }
+  .open-row .who { font-weight: 700; font-size: 15px; }
+  .open-row .rule { color: var(--sub); font-size: 13px; }
+  .open-row .next { font-size: 14px; margin-top: 2px; }
+  .open-row .next b { color: var(--accent); }
+  .open-row .next .rule { white-space: nowrap; }
   .museum { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 14px 6px; margin-bottom: 14px; }
   .museum h2 { font-size: 17px; margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
   .museum h2 a { color: var(--accent); font-size: 13px; font-weight: 500; text-decoration: none; white-space: nowrap; }
@@ -92,6 +101,8 @@
     <h1>주말 빈자리</h1>
     <div class="updated"><span id="updated">불러오는 중…</span><br><button id="reload" type="button">새로고침</button></div>
   </header>
+
+  <section class="opens" id="opens" hidden><h3>예약 열리는 시간</h3><div id="opensList"></div></section>
 
   <div class="controls">
     <div class="stepper" role="group" aria-label="필요한 인원">
@@ -146,8 +157,55 @@ function chipLabel(s) {
 
 function dateLabel(d) {
   const [, mo, da] = d.date.split("-").map(Number);
-  const cls = d.weekday === "토" ? "sat" : (d.weekday === "일" || d.holiday) ? "sun" : "";
-  return `${mo}/${da} <span class="${cls}">${d.weekday}${d.holiday ? "·공휴일" : ""}</span>`;
+  const cls = d.holiday || d.weekday === "일" ? "sun" : d.weekday === "토" ? "sat" : "";
+  const hol = d.holiday ? `·${typeof d.holiday === "string" ? esc(d.holiday) : "공휴일"}` : "";
+  return `${mo}/${da} <span class="${cls}">${d.weekday}${hol}</span>`;
+}
+
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+function kstParts(t) {
+  // Wall-clock parts in Korea time, whatever the phone's timezone.
+  const k = new Date(t.getTime() + 9 * 3600e3);
+  return { y: k.getUTCFullYear(), m: k.getUTCMonth() + 1, d: k.getUTCDate(), w: k.getUTCDay(), h: k.getUTCHours(), mi: k.getUTCMinutes() };
+}
+function dayWord(p) {
+  const n = kstParts(new Date());
+  const diff = Math.round((Date.UTC(p.y, p.m - 1, p.d) - Date.UTC(n.y, n.m - 1, n.d)) / 864e5);
+  return diff === 0 ? "오늘" : diff === 1 ? "내일" : diff === 2 ? "모레" : `${p.m}/${p.d}(${WD[p.w]})`;
+}
+function openWhen(iso) {
+  const t = new Date(iso);
+  const p = kstParts(t);
+  if (p.h === 0 && p.mi === 0) {
+    // 0시 is easier to read as "the night before, 12 o'clock".
+    return `${dayWord(kstParts(new Date(t.getTime() - 60e3)))} 밤 12시`;
+  }
+  const ap = p.h < 12 ? "오전" : "오후";
+  const h12 = p.h % 12 || 12;
+  return `${dayWord(p)} ${ap} ${h12}시${p.mi ? ` ${p.mi}분` : ""}`;
+}
+function untilText(iso) {
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "열렸어요";
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}분 뒤`;
+  const h = Math.floor(m / 60);
+  return h < 48 ? `${h}시간 ${m % 60}분 뒤` : `${Math.floor(h / 24)}일 뒤`;
+}
+function shortDate(d) {
+  const [, mo, da] = d.date.split("-").map(Number);
+  return `${mo}/${da}(${d.weekday})`;
+}
+function renderOpens() {
+  const rows = data.museums.filter(m => m.openRule).map(m => {
+    const next = m.days.find(d => d.status === "notOpen" && d.opensAt && new Date(d.opensAt) > Date.now());
+    const nextHtml = next
+      ? `<div class="next">${shortDate(next)}${next.holiday ? " 공휴일" : ""} 예약 → <b>${openWhen(next.opensAt)}</b> 오픈 <span class="rule">(${untilText(next.opensAt)})</span></div>`
+      : "";
+    return `<div class="open-row"><div class="who">${esc(m.short || m.name)}</div><div class="rule">${esc(m.openRule.text)}</div>${nextHtml}</div>`;
+  });
+  $("opens").hidden = !rows.length;
+  $("opensList").innerHTML = rows.join("");
 }
 
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
@@ -157,13 +215,14 @@ function render() {
   $("onlyAvail").checked = onlyAvail;
   if (!data) return;
   $("updated").textContent = `${ago(data.updatedAt)} 확인`;
+  renderOpens();
 
   $("list").innerHTML = data.museums.map(m => {
     let hidden = 0;
     const days = m.days.map(d => {
       if (d.status === "notOpen") {
         if (onlyAvail) { hidden++; return ""; }
-        return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum">아직 예약이 열리지 않았어요</span></div></div>`;
+        return `<div class="day"><div class="day-head"><span class="day-date">${dateLabel(d)}</span><span class="day-sum">${d.opensAt ? `${openWhen(d.opensAt)} 예약 오픈` : "아직 예약이 열리지 않았어요"}</span></div></div>`;
       }
       const usable = d.sessions.filter(s => chipClass(s) !== "no").length;
       if (onlyAvail && !usable) { hidden++; return ""; }
@@ -201,7 +260,7 @@ $("onlyAvail").onchange = (e) => { onlyAvail = e.target.checked; store.set("only
 $("reload").onclick = load;
 document.addEventListener("visibilitychange", () => { if (!document.hidden) load(); });
 setInterval(() => { if (!document.hidden) load(); }, 5 * 60 * 1000);
-setInterval(() => { if (data) $("updated").textContent = `${ago(data.updatedAt)} 확인`; }, 30 * 1000);
+setInterval(() => { if (data) { $("updated").textContent = `${ago(data.updatedAt)} 확인`; renderOpens(); } }, 30 * 1000);
 load();
 </script>
 </body>

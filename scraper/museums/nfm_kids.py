@@ -11,7 +11,7 @@ import re
 import time
 from datetime import date, datetime
 
-from common import REQUEST_GAP, day_entry, http, text, today_kst
+from common import REQUEST_GAP, day_entry, http, text, today_kst, wanted
 
 BASE = "https://www.nfm.go.kr"
 CALENDAR_URL = BASE + "/kids/nfmkid/exhibition/selectReserveView.do"
@@ -23,6 +23,9 @@ INFO = {
     "name": "국립민속박물관 어린이박물관",
     "short": "민속 어린이박물관",
     "bookingUrl": CALENDAR_URL,
+    "note": "개인 2~9명 예약",
+    # 홈페이지 안내: "매일 오전 9시에 2주 내의 예약이 가능" -> date D opens at D-14 09:00
+    "openRule": {"daysBefore": 14, "time": "09:00", "text": "매일 오전 9시에 2주 뒤 날짜 오픈"},
 }
 
 LOAD_RE = re.compile(
@@ -86,18 +89,21 @@ def _sessions(args):
     return out
 
 
-def fetch(weekends_only=True):
+def fetch(holidays=None):
+    holidays = holidays or {}
     today = today_kst()
     days = []
     for ymd, args in sorted(_open_dates().items()):
         d = datetime.strptime(ymd, "%Y%m%d").date()
         if d < today:
             continue
-        holiday = args["holiday"] == "Y"
-        if weekends_only and not (d.weekday() >= 5 or holiday):
+        keep, name = wanted(d, holidays)
+        if args["holiday"] == "Y":
+            keep, name = True, name or True
+        if not keep:
             continue
         time.sleep(REQUEST_GAP)
-        days.append(day_entry(d, holiday=holiday, sessions=_sessions(args)))
+        days.append(day_entry(d, holiday=name, sessions=_sessions(args)))
     caps = [s["capacity"] for day in days for s in day["sessions"] if s["capacity"]]
     cap = max(caps) if caps else None
     for day in days:

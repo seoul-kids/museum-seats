@@ -11,7 +11,7 @@ import json
 import time
 from datetime import datetime, timedelta
 
-from common import KST, REQUEST_GAP, day_entry, http, today_kst
+from common import KST, REQUEST_GAP, day_entry, http, today_kst, wanted
 
 BASE = "https://www.museum.go.kr/ticket_reservation/Web/Book/"
 PARAMS = {"shop_code": "102830101202", "product_group_code": "0101"}
@@ -21,7 +21,9 @@ INFO = {
     "name": "국립중앙박물관 어린이박물관",
     "short": "국중박 어린이박물관",
     "bookingUrl": "https://www.museum.go.kr/MUSEUM/contents/M0104010000.do?schM=child&act=intro",
-    "note": "1회 최대 5명까지 예약",
+    "note": "개인 2~5명 예약",
+    # 홈페이지 안내: "예약은 관람일 14일 전 00시부터 가능"
+    "openRule": {"daysBefore": 14, "time": "00:00", "text": "매일 0시에 14일 뒤 날짜 오픈"},
 }
 
 
@@ -66,13 +68,15 @@ def _sessions(ymd):
     return out
 
 
-def fetch(weekends_only=True):
+def fetch(holidays=None):
+    holidays = holidays or {}
     today = today_kst()
     days = []
     for ymd in _open_dates():
         d = datetime.strptime(ymd, "%Y%m%d").date()
-        if d < today or (weekends_only and d.weekday() < 5):
+        keep, name = wanted(d, holidays)
+        if d < today or not keep:
             continue
         time.sleep(REQUEST_GAP)
-        days.append(day_entry(d, sessions=_sessions(ymd)))
+        days.append(day_entry(d, holiday=name, sessions=_sessions(ymd)))
     return {**INFO, "days": days}
