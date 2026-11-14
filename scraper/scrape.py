@@ -38,8 +38,8 @@ def load_previous(src):
 
 def opens_at(d, rule):
     """When booking for date d opens, as a KST ISO string (None if the rule is unknown)."""
-    if not rule:
-        return None
+    if not rule or "daysBefore" not in rule:
+        return None  # museum has no fixed rule; its scraper sets opensAt itself
     hh, mm = map(int, rule["time"].split(":"))
     t = datetime(d.year, d.month, d.day, hh, mm, tzinfo=KST) - timedelta(days=rule["daysBefore"])
     return t.isoformat(timespec="minutes")
@@ -76,6 +76,9 @@ def main():
         info = mod.INFO
         try:
             m = mod.fetch(holidays)
+            # Drop days that are already over (e.g. today after the last session).
+            m["days"] = [d for d in m["days"]
+                         if not (d["sessions"] and all(s["status"] == "ended" for s in d["sessions"]))]
             m["days"] = add_not_open(m["days"], holidays, info.get("openRule"))
             m.update(ok=True, checkedAt=now)
             print(f"[ok] {info['name']}: {len(m['days'])} weekend days")
